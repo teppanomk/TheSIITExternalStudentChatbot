@@ -1,0 +1,89 @@
+body {
+  font-family: Arial;
+  background: #ffe6f0;
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.chat-container {
+  width: 420px;
+  background: #fff0f6;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+#chat {
+  height: 400px;
+  overflow-y: auto;
+  border: 1px solid pink;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.message {
+  margin: 8px 0;
+  padding: 10px;
+  border-radius: 8px;
+  max-width: 80%;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.user {
+  background: #ffccde;
+  margin-left: auto;
+}
+
+.bot {
+  background: #ffe6f2;
+  margin-right: auto;
+}
+
+.msg-text { font-size: 14px; }
+.timestamp { font-size: 10px; opacity: 0.6; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; }
+}
+
+#userInput {
+  width: 100%;
+  padding: 10px;
+}
+
+#darkToggle {
+  margin-bottom: 10px;
+}
+
+/* Suggestions */
+#suggestions {
+  background: white;
+  border: 1px solid pink;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.suggestion-item:hover {
+  background: #ffe6f2;
+}
+
+/* Dark mode */
+body.dark-mode {
+  background: black;
+  color: white;
+}
+
+body.dark-mode .chat-container {
+  background: #1a001a;
+}
+
+body.dark-mode .bot,
+body.dark-mode .user {
+  color: white;
+}
