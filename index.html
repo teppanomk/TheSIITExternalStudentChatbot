@@ -7,19 +7,16 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
+  <div class="chat-container">
+    <h2>🎓 AI Student Chatbot</h2>
+    <button id="darkToggle">🌙 Dark Mode</button>
 
-<div class="chat-container">
-  <h2>🎓 AI Student Chatbot</h2>
+    <div id="chat"></div>
 
-  <button id="darkToggle">🌙 Dark Mode</button>
+    <input id="userInput" placeholder="Ask a question..." autocomplete="off" />
+    <div id="suggestions"></div>
+  </div>
 
-  <div id="chat"></div>
-
-  <input id="userInput" placeholder="Ask a question..." autocomplete="off" />
-  <div id="suggestions"></div>
-</div>
-
-<script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
