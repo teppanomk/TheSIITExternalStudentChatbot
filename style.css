@@ -26,73 +26,20 @@ body {
   padding: 10px;
   border-radius: 8px;
   max-width: 80%;
-  animation: fadeIn 0.2s ease-in;
 }
 
-.user {
-  background: #ffccde;
-  margin-left: auto;
-}
+.user { background: #ffccde; margin-left: auto; }
+.bot { background: #ffe6f2; margin-right: auto; }
 
-.bot {
-  background: #ffe6f2;
-  margin-right: auto;
-}
-
-.msg-text { font-size: 14px; }
-.timestamp { font-size: 10px; opacity: 0.6; }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; }
-}
-
-#userInput {
-  width: 100%;
-  padding: 10px;
-}
-
-#darkToggle {
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-
-/* Suggestions */
-#suggestions {
-  background: white;
-  border: 1px solid pink;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.suggestion-item {
-  padding: 8px;
-  cursor: pointer;
-}
-
-.suggestion-item:hover {
-  background: #ffe6f2;
-}
+#userInput { width: 100%; padding: 10px; }
+#darkToggle { margin-bottom: 10px; cursor: pointer; }
+#suggestions { background: white; border: 1px solid pink; max-height: 150px; overflow-y: auto; }
+.suggestion-item { padding: 8px; cursor: pointer; }
+.suggestion-item:hover { background: #ffe6f2; }
 
 /* Dark mode */
-body.dark-mode {
-  background: black;
-  color: white;
-}
-
-body.dark-mode .chat-container {
-  background: #1a001a;
-}
-
-body.dark-mode #chat {
-  background: #1a001a;
-}
-
-body.dark-mode .user,
-body.dark-mode .bot {
-  color: white;
-}
-
-body.dark-mode #suggestions {
-  background: #1a001a;
-}
+body.dark-mode { background: black; color: white; }
+body.dark-mode .chat-container { background: #1a001a; }
+body.dark-mode #chat { background: #1a001a; }
+body.dark-mode .user, body.dark-mode .bot { color: white; }
+body.dark-mode #suggestions { background: #1a001a; }
