@@ -1,45 +1,82 @@
-// ===== CONFIG =====
+// ================= CONFIG =================
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIYW5hTWf2hz_j0VT7TBiZlAWkB183PuT25msmPFtizLvmD9ktXgV4aMj2e8E6IACs6U/pub?gid=0&single=true&output=csv";
-const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
-const LOG_API = "https://script.google.com/macros/s/AKfycbwP9vx2DO_jt3AhxTZSijG4ALs8Pa_gNHg289v9yiUAU3qZViwSifVIx_r4V8hrlnO9/exec";
 
-// ===== DATA =====
+const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
+
+const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
+
+// ================= STATE =================
 let knowledgeBase = [];
 let bannedWords = [];
+let lastLoaded = 0;
 
-// ===== LOAD Q&A =====
-async function loadSheetData() {
-  const res = await fetch(sheetURL);
-  const csv = await res.text();
-  const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-  knowledgeBase = parsed.data;
-  console.log("Q&A Loaded:", knowledgeBase.length);
+// ================= LOAD DATA =================
+async function loadSheetData(force = false) {
+  const now = Date.now();
+
+  // prevent too frequent reload
+  if (!force && now - lastLoaded < 10000) return;
+
+  try {
+    const response = await fetch(sheetURL);
+    const csv = await response.text();
+
+    const parsed = Papa.parse(csv, {
+      header: true,
+      skipEmptyLines: true
+    });
+
+    knowledgeBase = parsed.data;
+    lastLoaded = now;
+
+    console.log("✅ Sheet data loaded:", knowledgeBase.length);
+  } catch (err) {
+    console.error("❌ Error loading sheet:", err);
+  }
 }
 
-// ===== LOAD BANNED WORDS =====
 async function loadBannedWords() {
-  const res = await fetch(bannedURL);
-  const csv = await res.text();
-  const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+  try {
+    const response = await fetch(bannedURL);
+    const csv = await response.text();
 
-  bannedWords = parsed.data
-    .map(row => row["BannedWord"])
-    .filter(word => word && word.trim() !== "")
-    .map(word => word.trim().toLowerCase());
+    const parsed = Papa.parse(csv, {
+      header: true,
+      skipEmptyLines: true
+    });
 
-  console.log("Banned Words Loaded:", bannedWords);
+    if (parsed.data.length === 0) return;
+
+    const header = Object.keys(parsed.data[0]);
+    const bannedColumn = header.find(h =>
+      h.toLowerCase().includes("banned")
+    );
+
+    if (!bannedColumn) return;
+
+    bannedWords = parsed.data
+      .map(row => row[bannedColumn])
+      .filter(Boolean)
+      .map(word => word.toLowerCase());
+
+    console.log("🚫 Banned words loaded:", bannedWords.length);
+  } catch (err) {
+    console.error("❌ Error loading banned words:", err);
+  }
 }
 
-loadSheetData();
+// ================= AUTO REFRESH =================
+setInterval(() => {
+  loadSheetData();
+  loadBannedWords();
+  console.log("🔄 Auto-refresh triggered");
+}, 30000);
+
+// Initial load
+loadSheetData(true);
 loadBannedWords();
 
-// ===== CHECK BANNED =====
-function containsBannedWord(text) {
-  const cleanText = text.toLowerCase();
-  return bannedWords.some(word => new RegExp(`\\b${word}\\b`, "i").test(cleanText));
-}
-
-// ===== UI =====
+// ================= UI =================
 function addMessage(text, sender) {
   const chat = document.getElementById("chat");
   const div = document.createElement("div");
@@ -49,68 +86,115 @@ function addMessage(text, sender) {
   chat.scrollTop = chat.scrollHeight;
 }
 
-// ===== SEARCH =====
-function searchSheet(q) {
-  q = q.toLowerCase();
+// ================= SEARCH =================
+function searchSheet(question) {
+  const input = question.toLowerCase();
+
+  let bestMatch = null;
+  let bestScore = 0;
+
   for (const row of knowledgeBase) {
     if (!row["User Question"]) continue;
-    const question = row["User Question"].toLowerCase();
-    if (q.includes(question) || question.includes(q)) return row["Bot Answer"];
-  }
-  return null;
-}
 
-// ===== SEND =====
-async function sendMessage() {
-  const input = document.getElementById("userInput");
-  const msg = input.value.trim();
-  if (!msg) return;
+    const q = row["User Question"].toLowerCase();
+    let score = 0;
 
-  if (containsBannedWord(msg)) {
-    addMessage("⚠️ Your message contains a banned word.", "bot");
-    input.value = "";
-    return;
-  }
+    if (input.includes(q)) score += 3;
+    if (q.includes(input)) score += 2;
 
-  addMessage(msg, "user");
-  input.value = "";
+    const inputWords = input.split(/\W+/);
+    const qWords = q.split(/\W+/);
 
-  let answer = searchSheet(msg);
+    inputWords.forEach(word => {
+      if (qWords.includes(word)) score++;
+    });
 
-  // AI fallback
-  if (!answer) {
-    try {
-      const res = await fetch(LOG_API, {
-        method: "POST",
-        body: JSON.stringify({ type: "ai", question: msg })
-      });
-      const data = await res.json();
-      answer = data.answer;
-    } catch {
-      answer = "⚠️ AI unavailable.";
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = row;
     }
   }
 
-  addMessage(answer, "bot");
-
-  // Log
-  fetch(LOG_API, {
-    method: "POST",
-    mode: "no-cors",
-    body: JSON.stringify({
-      question: msg,
-      found: answer ? "Yes" : "No",
-      answer: answer
-    })
-  });
+  return bestScore > 1 ? bestMatch["Bot Answer"] : null;
 }
 
-// ===== EVENTS =====
-document.getElementById("userInput").addEventListener("keypress", e => {
-  if (e.key === "Enter") sendMessage();
+// ================= BANNED WORD CHECK =================
+function containsBannedWord(text) {
+  const words = text.toLowerCase().split(/\W+/);
+  return bannedWords.some(banned => words.includes(banned));
+}
+
+// ================= LOGGING =================
+async function logQuestion(question, found, answer) {
+  try {
+    await fetch(LOG_API, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, found, answer })
+    });
+  } catch (error) {
+    console.log("Logging error:", error);
+  }
+}
+
+// ================= MAIN CHAT =================
+async function sendMessage() {
+  const input = document.getElementById("userInput");
+  const message = input.value.trim();
+  if (!message) return;
+
+  // Refresh latest data before answering
+  await loadSheetData(true);
+  await loadBannedWords();
+
+  // Check banned words
+  if (containsBannedWord(message)) {
+    addMessage("⚠️ Your message contains banned words and cannot be sent.", "bot");
+    input.value = "";
+    input.focus();
+    return;
+  }
+
+  addMessage(message, "user");
+  input.value = "";
+  input.focus();
+
+  // Typing indicator
+  const chat = document.getElementById("chat");
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "message bot";
+  typingDiv.innerText = "Typing...";
+  chat.appendChild(typingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  // Search
+  let sheetAnswer = searchSheet(message);
+  let finalAnswer;
+
+  if (sheetAnswer) {
+    finalAnswer = sheetAnswer;
+    logQuestion(message, "Yes", finalAnswer);
+  } else {
+    finalAnswer = "Sorry, I don't have an answer for that yet.";
+    logQuestion(message, "No", finalAnswer);
+  }
+
+  // Replace typing with real answer
+  setTimeout(() => {
+    typingDiv.innerText = finalAnswer;
+  }, 500);
+}
+
+// ================= EVENTS =================
+document.getElementById("userInput").addEventListener("keypress", function(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    sendMessage();
+  }
 });
 
-// Dark mode toggle
-document.getElementById("darkToggle").onclick = () => {
+// Dark mode
+document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
-};
+});
