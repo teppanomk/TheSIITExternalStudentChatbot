@@ -1,9 +1,11 @@
 body {
-  font-family: Arial;
+  font-family: Arial, sans-serif;
   background: #ffe6f0;
   display: flex;
   justify-content: center;
   margin-top: 40px;
+  transition: background 0.3s, color 0.3s;
+  color: #000000;
 }
 
 .chat-container {
@@ -11,14 +13,16 @@ body {
   background: #fff0f6;
   padding: 20px;
   border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255, 0, 128, 0.2);
 }
 
 #chat {
-  height: 400px;
+  height: 420px;
   overflow-y: auto;
-  border: 1px solid pink;
+  border: 1px solid #ffc0cb;
   padding: 10px;
   margin-bottom: 10px;
+  background: #fff0f6;
 }
 
 .message {
@@ -28,18 +32,70 @@ body {
   max-width: 80%;
 }
 
-.user { background: #ffccde; margin-left: auto; }
-.bot { background: #ffe6f2; margin-right: auto; }
+.user {
+  background: #ffccde;
+  margin-left: auto;
+  text-align: right;
+  color: #800040;
+}
 
-#userInput { width: 100%; padding: 10px; }
-#darkToggle { margin-bottom: 10px; cursor: pointer; }
-#suggestions { background: white; border: 1px solid pink; max-height: 150px; overflow-y: auto; }
-.suggestion-item { padding: 8px; cursor: pointer; }
-.suggestion-item:hover { background: #ffe6f2; }
+.bot {
+  background: #ffe6f2;
+  margin-right: auto;
+  color: #800040;
+}
 
-/* Dark mode */
-body.dark-mode { background: black; color: white; }
-body.dark-mode .chat-container { background: #1a001a; }
-body.dark-mode #chat { background: #1a001a; }
-body.dark-mode .user, body.dark-mode .bot { color: white; }
-body.dark-mode #suggestions { background: #1a001a; }
+#userInput {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ff99cc;
+  border-radius: 5px;
+  background: #fff0f6;
+  color: #800040;
+}
+
+#darkToggle {
+  background: #ff99cc;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: white;
+  margin-bottom: 10px;
+}
+
+/* DARK MODE */
+body.dark-mode {
+  background: #000000;
+  color: #ffffff;
+}
+
+body.dark-mode .chat-container {
+  background: #1a001a;
+  color: #ffffff;
+}
+
+body.dark-mode #chat {
+  background: #1a001a;
+  border: 1px solid #ff66b3;
+}
+
+body.dark-mode .user {
+  background: #ff3399;
+  color: #ffffff;
+}
+
+body.dark-mode .bot {
+  background: #ff66b3;
+  color: #ffffff;
+}
+
+body.dark-mode #userInput {
+  background: #1a001a;
+  color: #ffffff;
+}
+
+body.dark-mode #darkToggle {
+  background: #ff66b3;
+  color: #000000;
+}
