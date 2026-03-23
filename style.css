@@ -5,7 +5,7 @@ body {
   justify-content: center;
   margin-top: 40px;
   transition: background 0.3s, color 0.3s;
-  color: #000000;
+  color: #000;
 }
 
 .chat-container {
@@ -14,6 +14,12 @@ body {
   padding: 20px;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(255, 0, 128, 0.2);
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 }
 
 #chat {
@@ -45,8 +51,13 @@ body {
   color: #800040;
 }
 
+.input-area {
+  display: flex;
+  gap: 8px;
+}
+
 #userInput {
-  width: 100%;
+  flex: 1;
   padding: 10px;
   border: 1px solid #ff99cc;
   border-radius: 5px;
@@ -54,48 +65,70 @@ body {
   color: #800040;
 }
 
-#darkToggle {
-  background: #ff99cc;
+.send-btn {
+  padding: 10px 20px;
   border: none;
-  padding: 5px 10px;
+  background: #ff66b3;
+  color: #fff;
   border-radius: 5px;
   cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.send-btn:hover {
+  background: #ff3399;
+}
+
+.dark-btn {
+  padding: 5px 10px;
+  border: none;
+  background: #ff99cc;
   color: white;
-  margin-bottom: 10px;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-/* DARK MODE */
-body.dark-mode {
-  background: #000000;
-  color: #ffffff;
+.dark-mode {
+  background: #000;
+  color: #fff;
 }
 
-body.dark-mode .chat-container {
+.dark-mode .chat-container {
   background: #1a001a;
-  color: #ffffff;
+  color: #fff;
 }
 
-body.dark-mode #chat {
+.dark-mode #chat {
   background: #1a001a;
   border: 1px solid #ff66b3;
 }
 
-body.dark-mode .user {
+.dark-mode .user {
   background: #ff3399;
-  color: #ffffff;
+  color: #fff;
 }
 
-body.dark-mode .bot {
+.dark-mode .bot {
   background: #ff66b3;
-  color: #ffffff;
+  color: #fff;
 }
 
-body.dark-mode #userInput {
+.dark-mode #userInput {
   background: #1a001a;
-  color: #ffffff;
+  color: #fff;
 }
 
-body.dark-mode #darkToggle {
+.dark-mode .send-btn {
   background: #ff66b3;
-  color: #000000;
+  color: #000;
+}
+
+.dark-mode .send-btn:hover {
+  background: #ff3399;
+}
+
+.dark-mode .dark-btn {
+  background: #ff66b3;
+  color: #000;
 }
