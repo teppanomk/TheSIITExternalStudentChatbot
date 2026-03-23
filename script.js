@@ -3,7 +3,7 @@ const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIY
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
 
-const MIN_FUZZY_INPUT_LENGTH = 5; // Minimum input length to allow fuzzy search
+const MIN_FUZZY_INPUT_LENGTH = 5; // Minimum input length for fuzzy search
 
 // ================= STATE =================
 let knowledgeBase = [];
@@ -113,7 +113,6 @@ function similarity(a, b) {
 function searchSheet(question) {
   const input = normalizeThai(question);
 
-  // Prevent fuzzy search for short inputs
   if (input.length < MIN_FUZZY_INPUT_LENGTH) return null;
 
   let bestMatch = null;
@@ -121,9 +120,7 @@ function searchSheet(question) {
 
   for (const row of knowledgeBase) {
     if (!row.normalized) continue;
-
     const score = similarity(input, row.normalized);
-
     if (score > bestScore) {
       bestScore = score;
       bestMatch = row;
@@ -137,7 +134,7 @@ function searchSheet(question) {
 // ================= BANNED =================
 function isExactBannedWord(text) {
   const cleanText = normalizeThai(text);
-  return bannedWords.includes(cleanText);
+  return bannedWords.some(word => normalizeThai(word) === cleanText);
 }
 
 // ================= LOG =================
@@ -211,10 +208,7 @@ inputBox.addEventListener("input", () => {
 
   let scored = knowledgeBase.map(row => {
     const score = similarity(input, row.normalized);
-    return {
-      text: row["User Question"],
-      score
-    };
+    return { text: row["User Question"], score };
   });
 
   scored = scored
