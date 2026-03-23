@@ -2,6 +2,7 @@
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIYW5hTWf2hz_j0VT7TBiZlAWkB183PuT25msmPFtizLvmD9ktXgV4aMj2e8E6IACs6U/pub?gid=0&single=true&output=csv";
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
+const MIN_FUZZY_INPUT_LENGTH = 3; // Minimum length to perform fuzzy search
 
 // ================= STATE =================
 let knowledgeBase = [];
@@ -111,6 +112,9 @@ function similarity(a, b) {
 function searchSheet(question) {
   const input = normalizeThai(question);
 
+  // Skip fuzzy search if input is too short
+  if (input.length < MIN_FUZZY_INPUT_LENGTH) return null;
+
   let bestMatch = null;
   let bestScore = 0;
 
@@ -125,12 +129,11 @@ function searchSheet(question) {
     }
   }
 
-  if (bestScore >= 0.7) return bestMatch; // return the full row
+  if (bestScore >= 0.7) return bestMatch;
   return null;
 }
 
 // ================= BANNED =================
-// Returns true if the input EXACTLY matches a banned word
 function isExactBannedWord(text) {
   const cleanText = normalizeThai(text);
   return bannedWords.includes(cleanText);
@@ -161,7 +164,7 @@ async function sendMessage(msg = null) {
 
   const matchedRow = searchSheet(message);
 
-  // ✅ Block only if exact banned word and no match
+  // Block only if exact banned word and no knowledge base match
   if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
@@ -205,6 +208,12 @@ inputBox.addEventListener("input", () => {
     return;
   }
 
+  // Skip suggestion box if input too short
+  if (input.length < MIN_FUZZY_INPUT_LENGTH) {
+    suggestionBox.style.display = "none";
+    return;
+  }
+
   let scored = knowledgeBase.map(row => {
     const score = similarity(input, row.normalized);
     return {
@@ -234,7 +243,7 @@ inputBox.addEventListener("input", () => {
     div.onclick = () => {
       inputBox.value = item.text;
       suggestionBox.style.display = "none";
-      sendMessage(item.text); // send clicked suggestion
+      sendMessage(item.text);
     };
 
     suggestionBox.appendChild(div);
