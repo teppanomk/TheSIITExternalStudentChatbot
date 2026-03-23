@@ -162,6 +162,7 @@ async function sendMessage(msg = null) {
 
   const matchedRow = searchSheet(message);
 
+  // Exact banned word detection if no knowledge base match
   if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
@@ -193,21 +194,9 @@ suggestionBox.style.zIndex = "999";
 suggestionBox.style.display = "none";
 suggestionBox.style.maxHeight = "150px";
 suggestionBox.style.overflowY = "auto";
-suggestionBox.style.color = "#000"; // default text color for light mode
+suggestionBox.style.color = "#000"; // force black text for visibility
 
 document.body.appendChild(suggestionBox);
-
-function updateSuggestionBoxColors() {
-  if (document.body.classList.contains("dark-mode")) {
-    suggestionBox.style.background = "#1a001a";
-    suggestionBox.style.border = "1px solid #ff66b3";
-    suggestionBox.style.color = "#ffffff";
-  } else {
-    suggestionBox.style.background = "#fff";
-    suggestionBox.style.border = "1px solid #ccc";
-    suggestionBox.style.color = "#000000";
-  }
-}
 
 inputBox.addEventListener("input", () => {
   if (!isLoaded || !knowledgeBase.length) return;
@@ -240,6 +229,7 @@ inputBox.addEventListener("input", () => {
     div.innerText = item.text;
     div.style.padding = "8px";
     div.style.cursor = "pointer";
+    div.style.color = "#000"; // black text for all suggestions
 
     div.onclick = () => {
       inputBox.value = item.text;
@@ -255,8 +245,6 @@ inputBox.addEventListener("input", () => {
   suggestionBox.style.top = rect.bottom + window.scrollY + "px";
   suggestionBox.style.width = inputBox.offsetWidth + "px";
   suggestionBox.style.display = "block";
-
-  updateSuggestionBoxColors();
 });
 
 document.addEventListener("click", e => {
@@ -276,5 +264,6 @@ sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
-  updateSuggestionBoxColors();
+  // Keep suggestion box text black for visibility
+  suggestionBox.style.color = "#000";
 });
