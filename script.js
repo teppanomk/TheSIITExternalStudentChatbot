@@ -130,9 +130,10 @@ function searchSheet(question) {
 }
 
 // ================= BANNED =================
-function containsBannedWord(text) {
+// Returns true if the input EXACTLY matches a banned word
+function isExactBannedWord(text) {
   const cleanText = normalizeThai(text);
-  return bannedWords.some(word => cleanText.includes(word));
+  return bannedWords.includes(cleanText);
 }
 
 // ================= LOG =================
@@ -160,8 +161,8 @@ async function sendMessage(msg = null) {
 
   const matchedRow = searchSheet(message);
 
-  // ✅ Fix: only check banned words if no match found
-  if (!matchedRow && containsBannedWord(message)) {
+  // ✅ Block only if exact banned word and no match
+  if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
     return;
@@ -233,7 +234,7 @@ inputBox.addEventListener("input", () => {
     div.onclick = () => {
       inputBox.value = item.text;
       suggestionBox.style.display = "none";
-      sendMessage(item.text); // send the clicked suggestion
+      sendMessage(item.text); // send clicked suggestion
     };
 
     suggestionBox.appendChild(div);
