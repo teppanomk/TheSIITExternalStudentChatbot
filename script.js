@@ -7,8 +7,6 @@ const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgz
 let knowledgeBase = [];
 let bannedWords = [];
 let isLoaded = false;
-let lastLoaded = 0;
-const CACHE_TIME = 5 * 60 * 1000; // 5 minutes
 
 // ================= NORMALIZATION =================
 function normalizeThai(str) {
@@ -23,71 +21,44 @@ function normalizeThai(str) {
 async function loadSheetData() {
   try {
     const response = await fetch(sheetURL);
-    if (!response.ok) throw new Error("Sheet fetch failed");
-
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-
-    knowledgeBase = parsed.data.map(row => ({
-      ...row,
-      normalized: normalizeThai(row["User Question"] || "")
-    }));
-
+    knowledgeBase = parsed.data;
     console.log("✅ Sheet loaded:", knowledgeBase.length);
-
   } catch (err) {
     console.error("❌ Sheet error:", err);
-    addMessage("⚠️ Failed to load chatbot data. Please try again later.", "bot");
   }
 }
 
 async function loadBannedWords() {
   try {
     const response = await fetch(bannedURL);
-    if (!response.ok) throw new Error("Banned words fetch failed");
-
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-
     if (!parsed.data.length) return;
 
     const firstColumn = Object.keys(parsed.data[0])[0];
-
     bannedWords = parsed.data
       .map(row => row[firstColumn])
       .filter(Boolean)
       .map(word => normalizeThai(word));
 
     console.log("🚫 Banned words loaded:", bannedWords);
-
   } catch (err) {
     console.error("❌ Error loading banned words:", err);
-    addMessage("⚠️ Failed to load filter system.", "bot");
   }
 }
 
-// ================= INIT WITH CACHE =================
-async function initData(force = false) {
-  const now = Date.now();
-
-  if (!force && now - lastLoaded < CACHE_TIME) {
-    console.log("⏳ Using cached data");
-    isLoaded = true;
-    return;
-  }
-
-  isLoaded = false;
-
+// ================= INITIAL LOAD =================
+async function initData() {
   await loadSheetData();
   await loadBannedWords();
-
-  lastLoaded = now;
   isLoaded = true;
-
-  console.log("✅ Data ready");
+  console.log("✅ All data loaded");
 }
 
 initData();
+setInterval(initData, 30000);
 
 // ================= UI =================
 function addMessage(text, sender) {
@@ -108,61 +79,35 @@ function addTyping() {
   return div;
 }
 
-// ================= FUZZY SEARCH =================
-function editDistance(a, b) {
-  const matrix = [];
+// ================= SEARCH =================
+function searchSheet(question) {
+  const normalizedInput = normalizeThai(question);
 
-  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
+  // Exact match first
+  for (const row of knowledgeBase) {
+    if (!row["User Question"]) continue;
+    const q = normalizeThai(row["User Question"]);
+    if (q === normalizedInput) return row["Bot Answer"];
   }
 
-  return matrix[b.length][a.length];
-}
-
-function similarity(a, b) {
-  const longer = a.length > b.length ? a : b;
-  const shorter = a.length > b.length ? b : a;
-
-  if (longer.length === 0) return 1.0;
-
-  return (longer.length - editDistance(longer, shorter)) / longer.length;
-}
-
-function searchSheet(question) {
-  const input = normalizeThai(question);
-
+  // Keyword match
+  const inputWords = normalizedInput.split(/\W+/).filter(Boolean);
   let bestMatch = null;
   let bestScore = 0;
 
   for (const row of knowledgeBase) {
-    if (!row.normalized) continue;
+    if (!row["User Question"]) continue;
+    const q = normalizeThai(row["User Question"]);
+    const qWords = q.split(/\W+/).filter(Boolean);
 
-    const score = similarity(input, row.normalized);
+    let matchCount = 0;
+    inputWords.forEach(word => { if (qWords.includes(word)) matchCount++; });
+    const score = matchCount / inputWords.length;
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = row;
-    }
+    if (score > bestScore) { bestScore = score; bestMatch = row; }
   }
 
-  if (bestScore >= 0.7) {
-    console.log("🎯 Match score:", bestScore);
-    return bestMatch["Bot Answer"];
-  }
-
+  if (bestScore >= 0.6) return bestMatch["Bot Answer"];
   return null;
 }
 
@@ -190,13 +135,8 @@ async function logQuestion(question, found, answer) {
 async function sendMessage() {
   const input = document.getElementById("userInput");
   const rawMessage = input.value.trim();
-
   if (!rawMessage) return;
-
-  if (!isLoaded) {
-    addMessage("⏳ Loading data, please wait...", "bot");
-    return;
-  }
+  if (!isLoaded) { addMessage("⏳ Loading data, please wait...", "bot"); return; }
 
   if (containsBannedWord(rawMessage)) {
     addMessage("⚠️ Message contains banned words.", "bot");
@@ -208,7 +148,6 @@ async function sendMessage() {
   input.value = "";
 
   const typing = addTyping();
-
   let answer = searchSheet(rawMessage);
 
   if (!answer) {
@@ -218,9 +157,7 @@ async function sendMessage() {
     logQuestion(rawMessage, "Yes", answer);
   }
 
-  setTimeout(() => {
-    typing.innerText = answer;
-  }, 400);
+  setTimeout(() => { typing.innerText = answer; }, 400);
 }
 
 // ================= EVENTS =================
@@ -228,12 +165,8 @@ const inputBox = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 
 inputBox.addEventListener("keydown", function(event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    sendMessage();
-  }
+  if (event.key === "Enter") { event.preventDefault(); sendMessage(); }
 });
-
 sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
