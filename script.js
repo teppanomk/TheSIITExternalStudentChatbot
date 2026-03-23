@@ -3,6 +3,8 @@ const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIY
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
 
+const MIN_FUZZY_INPUT_LENGTH = 5; // Minimum input length for fuzzy search
+
 // ================= STATE =================
 let knowledgeBase = [];
 let bannedWords = [];
@@ -41,10 +43,8 @@ async function loadBannedWords() {
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
 
-    const firstColumn = Object.keys(parsed.data[0])[0];
-
     bannedWords = parsed.data
-      .map(row => row[firstColumn])
+      .map(row => row["BannedWord"])
       .filter(Boolean)
       .map(word => normalizeThai(word));
 
@@ -112,29 +112,28 @@ function similarity(a, b) {
 // ================= SEARCH =================
 function searchSheet(question) {
   const input = normalizeThai(question);
+  if (input.length < MIN_FUZZY_INPUT_LENGTH) return null;
 
   let bestMatch = null;
   let bestScore = 0;
 
   for (const row of knowledgeBase) {
     if (!row.normalized) continue;
-
     const score = similarity(input, row.normalized);
-
     if (score > bestScore) {
       bestScore = score;
       bestMatch = row;
     }
   }
 
-  if (bestScore >= 0.7) return bestMatch["Bot Answer"];
+  if (bestScore >= 0.7) return bestMatch;
   return null;
 }
 
 // ================= BANNED =================
-function containsBannedWord(text) {
+function isExactBannedWord(text) {
   const cleanText = normalizeThai(text);
-  return bannedWords.some(word => cleanText.includes(word));
+  return bannedWords.some(word => normalizeThai(word) === cleanText);
 }
 
 // ================= LOG =================
@@ -150,31 +149,33 @@ async function logQuestion(question, found, answer) {
 }
 
 // ================= CHAT =================
-async function sendMessage() {
+async function sendMessage(msg = null) {
   const input = document.getElementById("userInput");
-  const msg = input.value.trim();
-  if (!msg) return;
+  const message = msg !== null ? msg : input.value.trim();
+  if (!message) return;
 
   if (!isLoaded) {
     addMessage("⏳ Loading...", "bot");
     return;
   }
 
-  if (containsBannedWord(msg)) {
+  const matchedRow = searchSheet(message);
+
+  if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
-    input.value = "";
+    if (!msg) input.value = "";
     return;
   }
 
-  addMessage(msg, "user");
-  input.value = "";
+  addMessage(message, "user");
+  if (!msg) input.value = "";
 
   const typing = addTyping();
-  let answer = searchSheet(msg);
-
+  let answer = matchedRow ? matchedRow["Bot Answer"] : null;
   if (!answer) answer = "Sorry, I don't have an answer for that yet.";
-
   setTimeout(() => typing.innerText = answer, 400);
+
+  logQuestion(message, !!matchedRow, answer);
 }
 
 // ================= SMART SUGGESTIONS =================
@@ -183,12 +184,13 @@ const sendBtn = document.getElementById("sendBtn");
 
 const suggestionBox = document.createElement("div");
 suggestionBox.style.position = "absolute";
-suggestionBox.style.background = "#fff";
+suggestionBox.style.background = "#fff";  // ALWAYS white background
 suggestionBox.style.border = "1px solid #ccc";
 suggestionBox.style.zIndex = "999";
 suggestionBox.style.display = "none";
 suggestionBox.style.maxHeight = "150px";
 suggestionBox.style.overflowY = "auto";
+suggestionBox.style.color = "#000"; // ALWAYS black text
 
 document.body.appendChild(suggestionBox);
 
@@ -196,7 +198,7 @@ inputBox.addEventListener("input", () => {
   if (!isLoaded || !knowledgeBase.length) return;
 
   const input = normalizeThai(inputBox.value);
-  if (!input) {
+  if (!input || input.length < MIN_FUZZY_INPUT_LENGTH) {
     suggestionBox.style.display = "none";
     return;
   }
@@ -223,10 +225,13 @@ inputBox.addEventListener("input", () => {
     div.innerText = item.text;
     div.style.padding = "8px";
     div.style.cursor = "pointer";
+    div.style.color = "#000"; // FORCE black text
+    div.style.background = "#fff"; // FORCE white background
 
     div.onclick = () => {
       inputBox.value = item.text;
       suggestionBox.style.display = "none";
+      sendMessage(item.text);
     };
 
     suggestionBox.appendChild(div);
@@ -256,4 +261,7 @@ sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
+  // suggestion dropdown stays white with black text regardless of dark mode
+  suggestionBox.style.background = "#fff";
+  suggestionBox.style.color = "#000";
 });
