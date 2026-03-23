@@ -3,8 +3,9 @@ const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIY
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
 const MIN_FUZZY_INPUT_LENGTH = 5;
-const MAX_INPUT_LENGTH = 100; // max characters per message
+const MAX_INPUT_LENGTH = 100;
 const RATE_LIMIT_MS = 1500; // 1.5 seconds between messages
+const MAX_SAFE_LENGTH = 20; // max safe length before warning
 
 // ================= STATE =================
 let knowledgeBase = [];
@@ -38,12 +39,10 @@ async function loadSheetData() {
     const response = await fetch(sheetURL);
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-
     knowledgeBase = parsed.data.map(row => ({
       ...row,
       normalized: normalizeThai(row["User Question"] || "")
     }));
-
     console.log("✅ Sheet loaded:", knowledgeBase.length);
   } catch (err) {
     console.error("❌ Sheet error:", err);
@@ -55,12 +54,10 @@ async function loadBannedWords() {
     const response = await fetch(bannedURL);
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-
     bannedWords = parsed.data
       .map(row => row["BannedWord"])
       .filter(Boolean)
       .map(word => normalizeThai(word));
-
     console.log("🚫 Banned words loaded:", bannedWords);
   } catch (err) {
     console.error("❌ Error loading banned words:", err);
@@ -81,7 +78,7 @@ function addMessage(text, sender) {
   const chat = document.getElementById("chat");
   const div = document.createElement("div");
   div.className = "message " + sender;
-  div.innerHTML = escapeHTML(text); // use escaped HTML
+  div.innerHTML = escapeHTML(text);
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -129,7 +126,6 @@ function searchSheet(question) {
 
   let bestMatch = null;
   let bestScore = 0;
-
   for (const row of knowledgeBase) {
     if (!row.normalized) continue;
     const score = similarity(input, row.normalized);
@@ -138,7 +134,6 @@ function searchSheet(question) {
       bestMatch = row;
     }
   }
-
   if (bestScore >= 0.7) return bestMatch;
   return null;
 }
@@ -167,15 +162,16 @@ async function sendMessage(msg = null) {
   const message = msg !== null ? msg : input.value.trim();
   if (!message) return;
 
-  // Rate limiting
   const now = Date.now();
-  if (now - lastMessageTime < RATE_LIMIT_MS) {
-    addMessage("⏳ Please wait a moment before sending again.", "bot");
+
+  // Rate limiting for long messages or frequent sends
+  if (message.length > MAX_SAFE_LENGTH || now - lastMessageTime < RATE_LIMIT_MS) {
+    addMessage(`⚠️ Please wait 1.5 seconds before sending long messages (> ${MAX_SAFE_LENGTH} chars).`, "bot");
     return;
   }
+
   lastMessageTime = now;
 
-  // Input length validation
   if (message.length > MAX_INPUT_LENGTH) {
     addMessage(`⚠️ Message too long (max ${MAX_INPUT_LENGTH} chars).`, "bot");
     return;
@@ -186,22 +182,19 @@ async function sendMessage(msg = null) {
     return;
   }
 
-  // Knowledge base takes priority
+  // Knowledge base match takes priority
   const matchedRow = searchSheet(message);
 
   if (matchedRow) {
     addMessage(message, "user");
     if (!msg) input.value = "";
-
     const typing = addTyping();
-    let answer = matchedRow["Bot Answer"];
-    setTimeout(() => typing.innerHTML = escapeHTML(answer), 400);
-
-    logQuestion(message, true, answer);
+    setTimeout(() => typing.innerHTML = escapeHTML(matchedRow["Bot Answer"]), 400);
+    logQuestion(message, true, matchedRow["Bot Answer"]);
     return;
   }
 
-  // Only block exact banned words if no KB match
+  // Only exact banned words trigger block if no KB match
   if (isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
@@ -211,12 +204,9 @@ async function sendMessage(msg = null) {
   // Default response
   addMessage(message, "user");
   if (!msg) input.value = "";
-
   const typing = addTyping();
-  let answer = "Sorry, I don't have an answer for that yet.";
-  setTimeout(() => typing.innerHTML = escapeHTML(answer), 400);
-
-  logQuestion(message, false, answer);
+  setTimeout(() => typing.innerHTML = escapeHTML("Sorry, I don't have an answer for that yet."), 400);
+  logQuestion(message, false, "Sorry, I don't have an answer for that yet.");
 }
 
 // ================= SMART SUGGESTIONS =================
@@ -225,56 +215,36 @@ const sendBtn = document.getElementById("sendBtn");
 
 const suggestionBox = document.createElement("div");
 suggestionBox.style.position = "absolute";
-suggestionBox.style.background = "#fff";  
+suggestionBox.style.background = "#fff";
 suggestionBox.style.border = "1px solid #ccc";
 suggestionBox.style.zIndex = "999";
 suggestionBox.style.display = "none";
 suggestionBox.style.maxHeight = "150px";
 suggestionBox.style.overflowY = "auto";
-suggestionBox.style.color = "#000"; 
-
+suggestionBox.style.color = "#000";
 document.body.appendChild(suggestionBox);
 
 inputBox.addEventListener("input", () => {
   if (!isLoaded || !knowledgeBase.length) return;
-
   const input = normalizeThai(inputBox.value);
   if (!input || input.length < MIN_FUZZY_INPUT_LENGTH) {
     suggestionBox.style.display = "none";
     return;
   }
 
-  let scored = knowledgeBase.map(row => {
-    const score = similarity(input, row.normalized);
-    return { text: row["User Question"], score };
-  });
-
-  scored = scored
-    .filter(item => item.score > 0.3)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
-
-  if (!scored.length) {
-    suggestionBox.style.display = "none";
-    return;
-  }
+  let scored = knowledgeBase.map(row => ({ text: row["User Question"], score: similarity(input, row.normalized) }));
+  scored = scored.filter(item => item.score > 0.3).sort((a, b) => b.score - a.score).slice(0, 5);
+  if (!scored.length) { suggestionBox.style.display = "none"; return; }
 
   suggestionBox.innerHTML = "";
-
   scored.forEach(item => {
     const div = document.createElement("div");
     div.innerText = item.text;
     div.style.padding = "8px";
     div.style.cursor = "pointer";
-    div.style.color = "#000"; 
-    div.style.background = "#fff"; 
-
-    div.onclick = () => {
-      inputBox.value = item.text;
-      suggestionBox.style.display = "none";
-      sendMessage(item.text);
-    };
-
+    div.style.color = "#000";
+    div.style.background = "#fff";
+    div.onclick = () => { inputBox.value = item.text; suggestionBox.style.display = "none"; sendMessage(item.text); };
     suggestionBox.appendChild(div);
   });
 
@@ -285,17 +255,11 @@ inputBox.addEventListener("input", () => {
   suggestionBox.style.display = "block";
 });
 
-document.addEventListener("click", e => {
-  if (e.target !== inputBox) suggestionBox.style.display = "none";
-});
+document.addEventListener("click", e => { if (e.target !== inputBox) suggestionBox.style.display = "none"; });
 
 // ================= EVENTS =================
 inputBox.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    sendMessage();
-    suggestionBox.style.display = "none";
-  }
+  if (e.key === "Enter") { e.preventDefault(); sendMessage(); suggestionBox.style.display = "none"; }
 });
 
 sendBtn.addEventListener("click", sendMessage);
