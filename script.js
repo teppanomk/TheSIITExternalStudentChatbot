@@ -148,37 +148,36 @@ async function logQuestion(question, found, answer) {
 }
 
 // ================= CHAT =================
-async function sendMessage() {
+async function sendMessage(msg = null) {
   const input = document.getElementById("userInput");
-  const msg = input.value.trim();
-  if (!msg) return;
+  const message = msg !== null ? msg : input.value.trim();
+  if (!message) return;
 
   if (!isLoaded) {
     addMessage("⏳ Loading...", "bot");
     return;
   }
 
-  const matchedRow = searchSheet(msg);
+  const matchedRow = searchSheet(message);
 
-  // ✅ Only block banned words if no matchedRow
-  if (!matchedRow && containsBannedWord(msg)) {
+  // ✅ Fix: only check banned words if no match found
+  if (!matchedRow && containsBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
-    input.value = "";
+    if (!msg) input.value = "";
     return;
   }
 
-  addMessage(msg, "user");
-  input.value = "";
+  addMessage(message, "user");
+  if (!msg) input.value = "";
 
   const typing = addTyping();
 
   let answer = matchedRow ? matchedRow["Bot Answer"] : null;
-
   if (!answer) answer = "Sorry, I don't have an answer for that yet.";
 
   setTimeout(() => typing.innerText = answer, 400);
 
-  logQuestion(msg, !!matchedRow, answer);
+  logQuestion(message, !!matchedRow, answer);
 }
 
 // ================= SMART SUGGESTIONS =================
@@ -234,7 +233,7 @@ inputBox.addEventListener("input", () => {
     div.onclick = () => {
       inputBox.value = item.text;
       suggestionBox.style.display = "none";
-      sendMessage(); // Automatically send suggestion
+      sendMessage(item.text); // send the clicked suggestion
     };
 
     suggestionBox.appendChild(div);
