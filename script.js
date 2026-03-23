@@ -83,7 +83,7 @@ function addTyping() {
 function searchSheet(question) {
   const normalizedInput = normalizeThai(question);
 
-  // Exact match first
+  // Exact match
   for (const row of knowledgeBase) {
     if (!row["User Question"]) continue;
     const q = normalizeThai(row["User Question"]);
@@ -101,10 +101,16 @@ function searchSheet(question) {
     const qWords = q.split(/\W+/).filter(Boolean);
 
     let matchCount = 0;
-    inputWords.forEach(word => { if (qWords.includes(word)) matchCount++; });
+    inputWords.forEach(word => {
+      if (qWords.includes(word)) matchCount++;
+    });
+
     const score = matchCount / inputWords.length;
 
-    if (score > bestScore) { bestScore = score; bestMatch = row; }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = row;
+    }
   }
 
   if (bestScore >= 0.6) return bestMatch["Bot Answer"];
@@ -135,8 +141,13 @@ async function logQuestion(question, found, answer) {
 async function sendMessage() {
   const input = document.getElementById("userInput");
   const rawMessage = input.value.trim();
+
   if (!rawMessage) return;
-  if (!isLoaded) { addMessage("⏳ Loading data, please wait...", "bot"); return; }
+
+  if (!isLoaded) {
+    addMessage("⏳ Loading data, please wait...", "bot");
+    return;
+  }
 
   if (containsBannedWord(rawMessage)) {
     addMessage("⚠️ Message contains banned words.", "bot");
@@ -157,17 +168,95 @@ async function sendMessage() {
     logQuestion(rawMessage, "Yes", answer);
   }
 
-  setTimeout(() => { typing.innerText = answer; }, 400);
+  setTimeout(() => {
+    typing.innerText = answer;
+  }, 400);
 }
 
-// ================= EVENTS =================
+// ================= SUGGESTIONS (FIXED) =================
 const inputBox = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 
-inputBox.addEventListener("keydown", function(event) {
-  if (event.key === "Enter") { event.preventDefault(); sendMessage(); }
+const suggestionBox = document.createElement("div");
+suggestionBox.style.position = "absolute";
+suggestionBox.style.maxHeight = "150px";
+suggestionBox.style.overflowY = "auto";
+suggestionBox.style.display = "none";
+suggestionBox.style.zIndex = "999";
+suggestionBox.style.border = "1px solid #ccc";
+suggestionBox.style.background = "#fff";
+suggestionBox.style.color = "#000";
+
+document.body.appendChild(suggestionBox);
+
+inputBox.addEventListener("input", () => {
+  // 🔥 important fix
+  if (!isLoaded || knowledgeBase.length === 0) {
+    suggestionBox.style.display = "none";
+    return;
+  }
+
+  const value = inputBox.value.toLowerCase().trim();
+  suggestionBox.innerHTML = "";
+
+  if (!value) {
+    suggestionBox.style.display = "none";
+    return;
+  }
+
+  let results = knowledgeBase
+    .map(row => row["User Question"])
+    .filter(q => q && q.toLowerCase().includes(value))
+    .slice(0, 5);
+
+  if (!results.length) {
+    suggestionBox.style.display = "none";
+    return;
+  }
+
+  results.forEach(text => {
+    const div = document.createElement("div");
+    div.innerText = text;
+    div.style.padding = "8px";
+    div.style.cursor = "pointer";
+
+    div.onclick = () => {
+      inputBox.value = text;
+      suggestionBox.style.display = "none";
+      inputBox.focus();
+    };
+
+    suggestionBox.appendChild(div);
+  });
+
+  const rect = inputBox.getBoundingClientRect();
+  suggestionBox.style.left = rect.left + "px";
+  suggestionBox.style.top = rect.bottom + window.scrollY + "px";
+  suggestionBox.style.width = inputBox.offsetWidth + "px";
+
+  suggestionBox.style.display = "block";
 });
-sendBtn.addEventListener("click", sendMessage);
+
+// hide on click outside
+document.addEventListener("click", (e) => {
+  if (e.target !== inputBox) {
+    suggestionBox.style.display = "none";
+  }
+});
+
+// ================= EVENTS =================
+inputBox.addEventListener("keydown", function(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    sendMessage();
+    suggestionBox.style.display = "none";
+  }
+});
+
+sendBtn.addEventListener("click", () => {
+  sendMessage();
+  suggestionBox.style.display = "none";
+});
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
