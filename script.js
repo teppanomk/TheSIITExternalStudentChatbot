@@ -127,7 +127,7 @@ function searchSheet(question) {
     }
   }
 
-  if (bestScore >= 0.7) return bestMatch["Bot Answer"];
+  if (bestScore >= 0.7) return bestMatch; // return the full row now
   return null;
 }
 
@@ -160,7 +160,10 @@ async function sendMessage() {
     return;
   }
 
-  if (containsBannedWord(msg)) {
+  const matchedRow = searchSheet(msg);
+
+  // If matchedRow exists, ignore banned words
+  if (!matchedRow && containsBannedWord(msg)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     input.value = "";
     return;
@@ -170,11 +173,14 @@ async function sendMessage() {
   input.value = "";
 
   const typing = addTyping();
-  let answer = searchSheet(msg);
+
+  let answer = matchedRow ? matchedRow["Bot Answer"] : null;
 
   if (!answer) answer = "Sorry, I don't have an answer for that yet.";
 
   setTimeout(() => typing.innerText = answer, 400);
+
+  logQuestion(msg, !!matchedRow, answer);
 }
 
 // ================= SMART SUGGESTIONS =================
