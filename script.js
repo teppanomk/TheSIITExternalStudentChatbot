@@ -112,7 +112,6 @@ function similarity(a, b) {
 // ================= SEARCH =================
 function searchSheet(question) {
   const input = normalizeThai(question);
-
   if (input.length < MIN_FUZZY_INPUT_LENGTH) return null;
 
   let bestMatch = null;
@@ -162,7 +161,6 @@ async function sendMessage(msg = null) {
 
   const matchedRow = searchSheet(message);
 
-  // Exact banned word detection if no knowledge base match
   if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
@@ -173,10 +171,8 @@ async function sendMessage(msg = null) {
   if (!msg) input.value = "";
 
   const typing = addTyping();
-
   let answer = matchedRow ? matchedRow["Bot Answer"] : null;
   if (!answer) answer = "Sorry, I don't have an answer for that yet.";
-
   setTimeout(() => typing.innerText = answer, 400);
 
   logQuestion(message, !!matchedRow, answer);
@@ -188,13 +184,13 @@ const sendBtn = document.getElementById("sendBtn");
 
 const suggestionBox = document.createElement("div");
 suggestionBox.style.position = "absolute";
-suggestionBox.style.background = "#fff";
+suggestionBox.style.background = "#fff";  // ALWAYS white background
 suggestionBox.style.border = "1px solid #ccc";
 suggestionBox.style.zIndex = "999";
 suggestionBox.style.display = "none";
 suggestionBox.style.maxHeight = "150px";
 suggestionBox.style.overflowY = "auto";
-suggestionBox.style.color = "#000"; // force black text for visibility
+suggestionBox.style.color = "#000"; // ALWAYS black text
 
 document.body.appendChild(suggestionBox);
 
@@ -229,7 +225,8 @@ inputBox.addEventListener("input", () => {
     div.innerText = item.text;
     div.style.padding = "8px";
     div.style.cursor = "pointer";
-    div.style.color = "#000"; // black text for all suggestions
+    div.style.color = "#000"; // FORCE black text
+    div.style.background = "#fff"; // FORCE white background
 
     div.onclick = () => {
       inputBox.value = item.text;
@@ -264,6 +261,7 @@ sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
-  // Keep suggestion box text black for visibility
+  // suggestion dropdown stays white with black text regardless of dark mode
+  suggestionBox.style.background = "#fff";
   suggestionBox.style.color = "#000";
 });
