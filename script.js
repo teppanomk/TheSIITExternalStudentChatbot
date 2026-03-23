@@ -5,7 +5,7 @@ const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgz
 const MIN_FUZZY_INPUT_LENGTH = 5;
 const MAX_INPUT_LENGTH = 100;
 const RATE_LIMIT_MS = 1500; // 1.5 seconds between messages
-const MAX_SAFE_LENGTH = 20; // max safe length before warning
+const MAX_SAFE_LENGTH = 100; // max safe length before warning
 
 // ================= STATE =================
 let knowledgeBase = [];
