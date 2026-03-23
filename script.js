@@ -2,7 +2,8 @@
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIYW5hTWf2hz_j0VT7TBiZlAWkB183PuT25msmPFtizLvmD9ktXgV4aMj2e8E6IACs6U/pub?gid=0&single=true&output=csv";
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
-const MIN_FUZZY_INPUT_LENGTH = 3; // Minimum length to perform fuzzy search
+
+const MIN_FUZZY_INPUT_LENGTH = 5; // Minimum input length to allow fuzzy search
 
 // ================= STATE =================
 let knowledgeBase = [];
@@ -112,7 +113,7 @@ function similarity(a, b) {
 function searchSheet(question) {
   const input = normalizeThai(question);
 
-  // Skip fuzzy search if input is too short
+  // Prevent fuzzy search for short inputs
   if (input.length < MIN_FUZZY_INPUT_LENGTH) return null;
 
   let bestMatch = null;
@@ -164,7 +165,7 @@ async function sendMessage(msg = null) {
 
   const matchedRow = searchSheet(message);
 
-  // Block only if exact banned word and no knowledge base match
+  // Block exact banned words only if no knowledge base match
   if (!matchedRow && isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
@@ -203,13 +204,7 @@ inputBox.addEventListener("input", () => {
   if (!isLoaded || !knowledgeBase.length) return;
 
   const input = normalizeThai(inputBox.value);
-  if (!input) {
-    suggestionBox.style.display = "none";
-    return;
-  }
-
-  // Skip suggestion box if input too short
-  if (input.length < MIN_FUZZY_INPUT_LENGTH) {
+  if (!input || input.length < MIN_FUZZY_INPUT_LENGTH) {
     suggestionBox.style.display = "none";
     return;
   }
