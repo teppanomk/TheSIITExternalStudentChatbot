@@ -23,7 +23,12 @@ async function loadSheetData() {
     const response = await fetch(sheetURL);
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-    knowledgeBase = parsed.data;
+
+    knowledgeBase = parsed.data.map(row => ({
+      ...row,
+      normalized: normalizeThai(row["User Question"] || "")
+    }));
+
     console.log("✅ Sheet loaded:", knowledgeBase.length);
   } catch (err) {
     console.error("❌ Sheet error:", err);
@@ -35,9 +40,9 @@ async function loadBannedWords() {
     const response = await fetch(bannedURL);
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-    if (!parsed.data.length) return;
 
     const firstColumn = Object.keys(parsed.data[0])[0];
+
     bannedWords = parsed.data
       .map(row => row[firstColumn])
       .filter(Boolean)
@@ -49,14 +54,12 @@ async function loadBannedWords() {
   }
 }
 
-// ================= INITIAL LOAD =================
+// ================= INIT =================
 async function initData() {
   await loadSheetData();
   await loadBannedWords();
   isLoaded = true;
-  console.log("✅ All data loaded");
 }
-
 initData();
 setInterval(initData, 30000);
 
@@ -79,33 +82,44 @@ function addTyping() {
   return div;
 }
 
+// ================= FUZZY SEARCH =================
+function editDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      matrix[i][j] = b[i - 1] === a[j - 1]
+        ? matrix[i - 1][j - 1]
+        : Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function similarity(a, b) {
+  const longer = a.length > b.length ? a : b;
+  const shorter = a.length > b.length ? b : a;
+  if (longer.length === 0) return 1;
+  return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
 // ================= SEARCH =================
 function searchSheet(question) {
-  const normalizedInput = normalizeThai(question);
+  const input = normalizeThai(question);
 
-  // Exact match
-  for (const row of knowledgeBase) {
-    if (!row["User Question"]) continue;
-    const q = normalizeThai(row["User Question"]);
-    if (q === normalizedInput) return row["Bot Answer"];
-  }
-
-  // Keyword match
-  const inputWords = normalizedInput.split(/\W+/).filter(Boolean);
   let bestMatch = null;
   let bestScore = 0;
 
   for (const row of knowledgeBase) {
-    if (!row["User Question"]) continue;
-    const q = normalizeThai(row["User Question"]);
-    const qWords = q.split(/\W+/).filter(Boolean);
+    if (!row.normalized) continue;
 
-    let matchCount = 0;
-    inputWords.forEach(word => {
-      if (qWords.includes(word)) matchCount++;
-    });
-
-    const score = matchCount / inputWords.length;
+    const score = similarity(input, row.normalized);
 
     if (score > bestScore) {
       bestScore = score;
@@ -113,17 +127,17 @@ function searchSheet(question) {
     }
   }
 
-  if (bestScore >= 0.6) return bestMatch["Bot Answer"];
+  if (bestScore >= 0.7) return bestMatch["Bot Answer"];
   return null;
 }
 
-// ================= BANNED WORD CHECK =================
+// ================= BANNED =================
 function containsBannedWord(text) {
   const cleanText = normalizeThai(text);
   return bannedWords.some(word => cleanText.includes(word));
 }
 
-// ================= LOGGING =================
+// ================= LOG =================
 async function logQuestion(question, found, answer) {
   try {
     await fetch(LOG_API, {
@@ -132,98 +146,90 @@ async function logQuestion(question, found, answer) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, found, answer })
     });
-  } catch (err) {
-    console.log("Logging error:", err);
-  }
+  } catch (err) {}
 }
 
 // ================= CHAT =================
 async function sendMessage() {
   const input = document.getElementById("userInput");
-  const rawMessage = input.value.trim();
-
-  if (!rawMessage) return;
+  const msg = input.value.trim();
+  if (!msg) return;
 
   if (!isLoaded) {
-    addMessage("⏳ Loading data, please wait...", "bot");
+    addMessage("⏳ Loading...", "bot");
     return;
   }
 
-  if (containsBannedWord(rawMessage)) {
+  if (containsBannedWord(msg)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     input.value = "";
     return;
   }
 
-  addMessage(rawMessage, "user");
+  addMessage(msg, "user");
   input.value = "";
 
   const typing = addTyping();
-  let answer = searchSheet(rawMessage);
+  let answer = searchSheet(msg);
 
-  if (!answer) {
-    answer = "Sorry, I don't have an answer for that yet.";
-    logQuestion(rawMessage, "No", answer);
-  } else {
-    logQuestion(rawMessage, "Yes", answer);
-  }
+  if (!answer) answer = "Sorry, I don't have an answer for that yet.";
 
-  setTimeout(() => {
-    typing.innerText = answer;
-  }, 400);
+  setTimeout(() => typing.innerText = answer, 400);
 }
 
-// ================= SUGGESTIONS (FIXED) =================
+// ================= SMART SUGGESTIONS =================
 const inputBox = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 
 const suggestionBox = document.createElement("div");
 suggestionBox.style.position = "absolute";
+suggestionBox.style.background = "#fff";
+suggestionBox.style.border = "1px solid #ccc";
+suggestionBox.style.zIndex = "999";
+suggestionBox.style.display = "none";
 suggestionBox.style.maxHeight = "150px";
 suggestionBox.style.overflowY = "auto";
-suggestionBox.style.display = "none";
-suggestionBox.style.zIndex = "999";
-suggestionBox.style.border = "1px solid #ccc";
-suggestionBox.style.background = "#fff";
-suggestionBox.style.color = "#000";
 
 document.body.appendChild(suggestionBox);
 
 inputBox.addEventListener("input", () => {
-  // 🔥 important fix
-  if (!isLoaded || knowledgeBase.length === 0) {
+  if (!isLoaded || !knowledgeBase.length) return;
+
+  const input = normalizeThai(inputBox.value);
+  if (!input) {
     suggestionBox.style.display = "none";
     return;
   }
 
-  const value = inputBox.value.toLowerCase().trim();
-  suggestionBox.innerHTML = "";
+  let scored = knowledgeBase.map(row => {
+    const score = similarity(input, row.normalized);
+    return {
+      text: row["User Question"],
+      score
+    };
+  });
 
-  if (!value) {
-    suggestionBox.style.display = "none";
-    return;
-  }
-
-  let results = knowledgeBase
-    .map(row => row["User Question"])
-    .filter(q => q && q.toLowerCase().includes(value))
+  scored = scored
+    .filter(item => item.score > 0.3)
+    .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
-  if (!results.length) {
+  if (!scored.length) {
     suggestionBox.style.display = "none";
     return;
   }
 
-  results.forEach(text => {
+  suggestionBox.innerHTML = "";
+
+  scored.forEach(item => {
     const div = document.createElement("div");
-    div.innerText = text;
+    div.innerText = item.text;
     div.style.padding = "8px";
     div.style.cursor = "pointer";
 
     div.onclick = () => {
-      inputBox.value = text;
+      inputBox.value = item.text;
       suggestionBox.style.display = "none";
-      inputBox.focus();
     };
 
     suggestionBox.appendChild(div);
@@ -233,30 +239,23 @@ inputBox.addEventListener("input", () => {
   suggestionBox.style.left = rect.left + "px";
   suggestionBox.style.top = rect.bottom + window.scrollY + "px";
   suggestionBox.style.width = inputBox.offsetWidth + "px";
-
   suggestionBox.style.display = "block";
 });
 
-// hide on click outside
-document.addEventListener("click", (e) => {
-  if (e.target !== inputBox) {
-    suggestionBox.style.display = "none";
-  }
+document.addEventListener("click", e => {
+  if (e.target !== inputBox) suggestionBox.style.display = "none";
 });
 
 // ================= EVENTS =================
-inputBox.addEventListener("keydown", function(event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
+inputBox.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
     sendMessage();
     suggestionBox.style.display = "none";
   }
 });
 
-sendBtn.addEventListener("click", () => {
-  sendMessage();
-  suggestionBox.style.display = "none";
-});
+sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
