@@ -41,10 +41,8 @@ async function loadBannedWords() {
     const csv = await response.text();
     const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
 
-    const firstColumn = Object.keys(parsed.data[0])[0];
-
     bannedWords = parsed.data
-      .map(row => row[firstColumn])
+      .map(row => row["BannedWord"])
       .filter(Boolean)
       .map(word => normalizeThai(word));
 
@@ -127,7 +125,7 @@ function searchSheet(question) {
     }
   }
 
-  if (bestScore >= 0.7) return bestMatch; // return the full row now
+  if (bestScore >= 0.7) return bestMatch; // return the full row
   return null;
 }
 
@@ -162,7 +160,7 @@ async function sendMessage() {
 
   const matchedRow = searchSheet(msg);
 
-  // If matchedRow exists, ignore banned words
+  // ✅ Only block banned words if no matchedRow
   if (!matchedRow && containsBannedWord(msg)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     input.value = "";
@@ -236,6 +234,7 @@ inputBox.addEventListener("input", () => {
     div.onclick = () => {
       inputBox.value = item.text;
       suggestionBox.style.display = "none";
+      sendMessage(); // Automatically send suggestion
     };
 
     suggestionBox.appendChild(div);
