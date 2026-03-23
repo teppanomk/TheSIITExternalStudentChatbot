@@ -3,11 +3,14 @@ const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSfUYEYX8MIGIY
 const bannedURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREhew_r4KSC5plsfCVyKtmCp98MIINzoR-ZGdFYjNXbKCaiEf8GkYEwEvMvYAphrZB5ipDeSvqyVhr/pub?gid=0&single=true&output=csv";
 const LOG_API = "https://script.google.com/macros/s/AKfycbze3yVdySjDVy2MOi9SuZgzAOGe09VMx5d8RruXMemn7_IdG8B7LLDLOPDa1ApNvDmvvQ/exec";
 const MIN_FUZZY_INPUT_LENGTH = 5;
+const MAX_INPUT_LENGTH = 100; // max characters per message
+const RATE_LIMIT_MS = 1500; // 1.5 seconds between messages
 
 // ================= STATE =================
 let knowledgeBase = [];
 let bannedWords = [];
 let isLoaded = false;
+let lastMessageTime = 0;
 
 // ================= NORMALIZATION =================
 function normalizeThai(str) {
@@ -16,6 +19,17 @@ function normalizeThai(str) {
     .trim()
     .replace(/\s+/g, "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "");
+}
+
+// ================= HTML ESCAPE =================
+function escapeHTML(str) {
+  return str.replace(/[&<>"']/g, tag => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[tag]));
 }
 
 // ================= LOAD DATA =================
@@ -67,7 +81,7 @@ function addMessage(text, sender) {
   const chat = document.getElementById("chat");
   const div = document.createElement("div");
   div.className = "message " + sender;
-  div.innerText = text;
+  div.innerHTML = escapeHTML(text); // use escaped HTML
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -153,12 +167,26 @@ async function sendMessage(msg = null) {
   const message = msg !== null ? msg : input.value.trim();
   if (!message) return;
 
+  // Rate limiting
+  const now = Date.now();
+  if (now - lastMessageTime < RATE_LIMIT_MS) {
+    addMessage("⏳ Please wait a moment before sending again.", "bot");
+    return;
+  }
+  lastMessageTime = now;
+
+  // Input length validation
+  if (message.length > MAX_INPUT_LENGTH) {
+    addMessage(`⚠️ Message too long (max ${MAX_INPUT_LENGTH} chars).`, "bot");
+    return;
+  }
+
   if (!isLoaded) {
     addMessage("⏳ Loading...", "bot");
     return;
   }
 
-  // 1️⃣ Knowledge base match takes priority
+  // Knowledge base takes priority
   const matchedRow = searchSheet(message);
 
   if (matchedRow) {
@@ -167,26 +195,26 @@ async function sendMessage(msg = null) {
 
     const typing = addTyping();
     let answer = matchedRow["Bot Answer"];
-    setTimeout(() => typing.innerText = answer, 400);
+    setTimeout(() => typing.innerHTML = escapeHTML(answer), 400);
 
     logQuestion(message, true, answer);
     return;
   }
 
-  // 2️⃣ Only block exact banned words if no KB match
+  // Only block exact banned words if no KB match
   if (isExactBannedWord(message)) {
     addMessage("⚠️ Message contains banned words.", "bot");
     if (!msg) input.value = "";
     return;
   }
 
-  // 3️⃣ Default response
+  // Default response
   addMessage(message, "user");
   if (!msg) input.value = "";
 
   const typing = addTyping();
   let answer = "Sorry, I don't have an answer for that yet.";
-  setTimeout(() => typing.innerText = answer, 400);
+  setTimeout(() => typing.innerHTML = escapeHTML(answer), 400);
 
   logQuestion(message, false, answer);
 }
@@ -274,7 +302,6 @@ sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("darkToggle").addEventListener("click", () => {
   document.body.classList.toggle("dark-mode");
-  // Suggestion box stays white with black text
   suggestionBox.style.background = "#fff";
   suggestionBox.style.color = "#000";
 });
